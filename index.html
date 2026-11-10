@@ -345,6 +345,48 @@ a { color: inherit; }
   display: inline-flex; align-items: center; gap: 0.4rem; font-size: 0.7rem;
   color: var(--accent); margin-bottom: 1rem; letter-spacing: 0.06em;
 }
+.upload-section {
+  margin-top: 2rem; padding-top: 1.5rem; border-top: 1px solid var(--border);
+}
+.upload-section h4 {
+  font-family: 'Playfair Display', serif; font-weight: 400; font-size: 1rem;
+  margin-bottom: 1rem; letter-spacing: 0.04em; color: var(--fg);
+}
+.upload-form { display: flex; flex-wrap: wrap; gap: 1rem; align-items: flex-end; justify-content: center }
+.upload-field { display: flex; flex-direction: column; gap: 0.4rem }
+.upload-field label { font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.08em; color: var(--fg-secondary) }
+.upload-field select {
+  padding: 0.6rem 1rem; background: var(--bg); border: 1px solid var(--border);
+  border-radius: 4px; color: var(--fg); font-size: 0.85rem; font-family: 'Inter', sans-serif;
+  cursor: pointer; transition: border-color 0.3s;
+}
+.upload-field select:focus { outline: none; border-color: var(--accent) }
+.upload-dropzone {
+  border: 2px dashed var(--border); border-radius: 6px; padding: 1.5rem 2rem;
+  text-align: center; cursor: pointer; transition: all 0.3s; position: relative;
+  min-width: 200px;
+}
+.upload-dropzone:hover, .upload-dropzone.dragover { border-color: var(--accent); background: rgba(192,192,192,0.03) }
+.upload-dropzone input[type="file"] { position: absolute; inset: 0; opacity: 0; cursor: pointer }
+.upload-dropzone p { font-size: 0.8rem; color: var(--fg-secondary); pointer-events: none }
+.upload-dropzone svg { margin-bottom: 0.3rem; opacity: 0.5; pointer-events: none }
+.upload-progress {
+  width: 100%; margin-top: 0.5rem; display: none; text-align: center;
+}
+.upload-progress .progress-bar {
+  height: 3px; background: var(--border); border-radius: 2px; overflow: hidden; margin-bottom: 0.3rem;
+}
+.upload-progress .progress-fill { height: 100%; background: var(--accent); width: 0%; transition: width 0.3s }
+.upload-progress .progress-text { font-size: 0.7rem; color: var(--fg-secondary) }
+.delete-btn {
+  position: absolute; top: 8px; right: 8px; z-index: 10;
+  width: 28px; height: 28px; border-radius: 50%; border: none;
+  background: rgba(0,0,0,0.7); color: #ff6b6b; font-size: 1rem;
+  cursor: pointer; display: none; align-items: center; justify-content: center;
+  transition: all 0.3s; backdrop-filter: blur(4px);
+}
+.delete-btn:hover { background: rgba(255,50,50,0.3); color: #fff }
+.wallpaper-card:hover .delete-btn { display: flex }
 .empty-state { text-align: center; padding: 4rem 2rem; color: var(--fg-secondary) }
 .empty-state svg { width: 60px; height: 60px; margin-bottom: 1rem; opacity: 0.3 }
 .toast {
@@ -394,7 +436,7 @@ a { color: inherit; }
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="2" width="20" height="20" rx="5"/><circle cx="12" cy="12" r="5"/><circle cx="17.5" cy="6.5" r="1.5"/></svg>
         Instagram
       </a></li>
-      <li><a data-nav="login" class="admin-link" data-page="login" id="adminNavItem">Admin</a></li>
+      <li><a data-nav="admin" data-page="admin" class="admin-link">&#x26A1;</a></li>
     </ul>
     <div class="hamburger" id="hamburger"><span></span><span></span><span></span></div>
   </div>
@@ -425,22 +467,6 @@ a { color: inherit; }
     <div class="stat-item"><div class="stat-number" id="stat-desktop">0+</div><div class="stat-label">Desktop Designs</div></div>
     <div class="stat-item"><div class="stat-number" id="stat-collections">0+</div><div class="stat-label">Collections</div></div>
     <div class="stat-item"><div class="stat-number" id="stat-downloads">0</div><div class="stat-label">Downloads</div></div>
-  </div>
-
-  <div id="ownerControls" hidden>
-    <div class="owner-controls reveal">
-      <div class="owner-badge">
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M12 15l-2 5l9-11h-5l2-5l-9 11h5z"/></svg>
-        OWNER CONTROLS
-      </div>
-      <h3>Update Wallpaper Counts</h3>
-      <p style="color:var(--fg-secondary);font-size:0.85rem;margin-bottom:1.5rem">Adjust the counts below. Changes are saved instantly and visible to all visitors.</p>
-      <div class="counter-controls">
-        <div class="counter-control"><label>Mobile</label><div class="count-row"><button class="count-btn" id="btn-mobile-minus">&#x2212;</button><span class="count-val" id="ctrl-mobile">0</span><button class="count-btn" id="btn-mobile-plus">+</button></div></div>
-        <div class="counter-control"><label>Desktop</label><div class="count-row"><button class="count-btn" id="btn-desktop-minus">&#x2212;</button><span class="count-val" id="ctrl-desktop">0</span><button class="count-btn" id="btn-desktop-plus">+</button></div></div>
-        <div class="counter-control"><label>Collections</label><div class="count-row"><button class="count-btn" id="btn-collections-minus">&#x2212;</button><span class="count-val" id="ctrl-collections">0</span><button class="count-btn" id="btn-collections-plus">+</button></div></div>
-      </div>
-    </div>
   </div>
 
   <section class="section">
@@ -503,18 +529,93 @@ a { color: inherit; }
   </section>
 </div>
 
-<!-- LOGIN -->
-<div class="page" id="page-login">
-  <section class="admin-login-page">
+
+<!-- ADMIN LOGIN -->
+<div class="page" id="page-admin">
+  <div class="admin-login-page">
     <div class="login-card">
-      <h2>Admin Login</h2>
-      <form id="loginForm">
-        <div class="form-group"><label for="sv-username">Username</label><input type="text" id="sv-username" required autocomplete="username"></div>
-        <div class="form-group"><label for="sv-password">Password</label><input type="password" id="sv-password" required autocomplete="current-password"></div>
-        <div id="loginError" style="color:#ff6b6b;font-size:0.8rem;text-align:center;margin-bottom:0.5rem" hidden></div>
-        <button type="submit" class="btn btn-primary" style="width:100%;justify-content:center;margin-top:0.5rem">Sign In</button>
-      </form>
-      <p style="color:var(--fg-secondary);font-size:0.75rem;text-align:center;margin-top:1.5rem;opacity:0.5">Admin login requires the backend server running</p>
+      <div style="text-align:center;margin-bottom:1.5rem">
+        <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="1.5" style="margin-bottom:0.5rem"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/><circle cx="12" cy="16" r="1"/></svg>
+      </div>
+      <h2>Admin Portal</h2>
+      <p style="text-align:center;color:var(--fg-secondary);font-size:0.85rem;margin-bottom:2rem">Sign in to manage wallpapers</p>
+      <div class="form-group">
+        <label>Admin ID</label>
+        <input type="text" id="adminId" placeholder="Enter your admin ID" autocomplete="off">
+      </div>
+      <div class="form-group">
+        <label>Password</label>
+        <input type="password" id="adminPassword" placeholder="Enter password" autocomplete="off">
+      </div>
+      <div id="loginError" style="color:#ff6b6b;font-size:0.8rem;margin-bottom:1rem;display:none"></div>
+      <button class="btn btn-primary" id="adminLoginBtn" style="width:100%;justify-content:center">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"/><polyline points="10 17 15 12 10 7"/><line x1="15" y1="12" x2="3" y2="12"/></svg>
+        Sign In
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- ADMIN DASHBOARD (hidden until login) -->
+<div class="page" id="page-dashboard">
+  <section class="section" style="padding-top:7rem">
+    <div class="section-header">
+      <div class="owner-badge" style="justify-content:center">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M12 15l-2 5l9-11h-5l2-5l-9 11h5z"/></svg>
+        ADMIN DASHBOARD
+      </div>
+      <h2>Manage Wallpapers</h2>
+      <p>Upload, manage, and remove wallpapers from your site</p>
+      <div class="section-divider"></div>
+      <button class="btn btn-outline btn-small" id="adminLogoutBtn" style="margin-top:1rem">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+        Logout
+      </button>
+    </div>
+
+    <!-- Counter Controls -->
+    <div class="owner-controls" style="margin-bottom:2rem">
+      <h3>Update Counts</h3>
+      <p style="color:var(--fg-secondary);font-size:0.85rem;margin-bottom:1.5rem">Adjust the collection count below.</p>
+      <div class="counter-controls">
+        <div class="counter-control"><label>Collections</label><div class="count-row"><button class="count-btn" id="btn-collections-minus">&#x2212;</button><span class="count-val" id="ctrl-collections">0</span><button class="count-btn" id="btn-collections-plus">+</button></div></div>
+      </div>
+    </div>
+
+    <!-- Upload Section -->
+    <div class="owner-controls">
+      <h3>Upload Wallpaper</h3>
+      <p style="color:var(--fg-secondary);font-size:0.85rem;margin-bottom:1.5rem">Select category and upload your wallpaper image (PNG, JPG, or WebP &mdash; max 20 MB).</p>
+      <div class="upload-form">
+        <div class="upload-field">
+          <label>Category</label>
+          <select id="uploadCategory">
+            <option value="mobile">Mobile</option>
+            <option value="desktop">Desktop</option>
+          </select>
+        </div>
+        <div class="upload-dropzone" id="uploadDropzone">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+          <p>Click or drop image here</p>
+          <input type="file" id="uploadFile" accept="image/png,image/jpeg,image/webp">
+        </div>
+      </div>
+      <div class="upload-progress" id="uploadProgress">
+        <div class="progress-bar"><div class="progress-fill" id="progressFill"></div></div>
+        <div class="progress-text" id="progressText">Uploading...</div>
+      </div>
+    </div>
+
+    <!-- Existing Wallpapers Management -->
+    <div class="owner-controls" style="margin-top:2rem">
+      <h3>Mobile Wallpapers</h3>
+      <div id="adminMobileList" class="gallery-grid mobile" style="margin-top:1rem"></div>
+      <p id="adminMobileEmpty" style="color:var(--fg-secondary);font-size:0.85rem;padding:1rem 0">No mobile wallpapers uploaded yet.</p>
+    </div>
+    <div class="owner-controls" style="margin-top:2rem">
+      <h3>Desktop Wallpapers</h3>
+      <div id="adminDesktopList" class="gallery-grid desktop" style="margin-top:1rem"></div>
+      <p id="adminDesktopEmpty" style="color:var(--fg-secondary);font-size:0.85rem;padding:1rem 0">No desktop wallpapers uploaded yet.</p>
     </div>
   </section>
 </div>
@@ -608,14 +709,6 @@ a { color: inherit; }
     if (plus) plus.addEventListener('click', function(e) { e.stopPropagation(); adjustCount(key, 1); });
   });
 
-  // Login form
-  var loginForm = document.getElementById('loginForm');
-  if (loginForm) loginForm.addEventListener('submit', function(e) {
-    e.preventDefault();
-    var err = document.getElementById('loginError');
-    err.textContent = 'Admin login requires the backend server.';
-    err.hidden = false;
-  });
 
   // Lightbox download button
   var dlBtn = document.getElementById('lightboxDownload');
@@ -628,21 +721,24 @@ a { color: inherit; }
   var currentPage = 'home';
   var liveCounts = { mobile: 0, desktop: 0, collections: 0, downloads: 0 };
   var dbReady = false, isOwner = false, dbRef = null, saving = false;
+  var dbInstance = null, assetsInstance = null;
+  var wallpapers = { mobile: [], desktop: [] };
+  var adminLoggedIn = false;
 
-  // --- DB init ---
+  // --- DB + Assets init ---
   (async function initLive() {
     if (typeof claude === 'undefined') { useFallbackCounts(); return; }
     try {
       var db = await claude.use('db');
       var user = await claude.use('user');
+      var assets = await claude.use('assets');
       if (!db) { useFallbackCounts(); return; }
+      dbInstance = db;
+      assetsInstance = assets;
       if (user) {
         try { isOwner = user.isOwner(); } catch(e) { isOwner = false; }
       }
-      if (isOwner) {
-        var oc = document.getElementById('ownerControls');
-        if (oc) oc.hidden = false;
-      }
+      // isOwner is kept for reference but admin portal uses password login
       dbRef = db.doc('stats/counts');
       dbReady = true;
       var loadTimer = setTimeout(function() {
@@ -659,11 +755,31 @@ a { color: inherit; }
           liveCounts.downloads = d.downloads || 0;
         }
         renderStats();
-        if (isOwner) renderOwnerControls();
+        if (adminLoggedIn) renderOwnerControls();
       }, function(err) {
         clearTimeout(loadTimer);
         useFallbackCounts();
       });
+
+      // Subscribe to wallpapers collection
+      db.collection('wallpapers').orderBy('createdAt', 'desc').onSnapshot(function(snap) {
+        wallpapers = { mobile: [], desktop: [] };
+        snap.docs.forEach(function(doc) {
+          var d = doc.data();
+          if (d && d.type && wallpapers[d.type]) {
+            wallpapers[d.type].push({ id: doc.id, assetId: d.assetId, name: d.name, type: d.type, createdAt: d.createdAt });
+          }
+        });
+        liveCounts.mobile = wallpapers.mobile.length;
+        liveCounts.desktop = wallpapers.desktop.length;
+        renderStats();
+        if (adminLoggedIn) { renderOwnerControls(); renderAdminGalleries(); }
+        if (currentPage === 'mobile') loadGallery('mobile');
+        if (currentPage === 'desktop') loadGallery('desktop');
+      }, function(err) { /* silent */ });
+
+      // Setup upload handlers (always init, gated by adminLoggedIn in the handler)
+      if (assets) setupUpload(db, assets);
     } catch(e) {
       useFallbackCounts();
     }
@@ -708,8 +824,69 @@ a { color: inherit; }
     if (cc) cc.textContent = liveCounts.collections;
   }
 
+  // --- Admin Login / Logout ---
+  var ADMIN_ID = 'Sagevisuals@123';
+  var ADMIN_PASS = 'sage@1709';
+
+  (function() {
+    var loginBtn = document.getElementById('adminLoginBtn');
+    var logoutBtn = document.getElementById('adminLogoutBtn');
+    if (loginBtn) {
+      loginBtn.addEventListener('click', function() {
+        var idVal = document.getElementById('adminId').value.trim();
+        var pwVal = document.getElementById('adminPassword').value;
+        var errEl = document.getElementById('loginError');
+        if (idVal === ADMIN_ID && pwVal === ADMIN_PASS) {
+          adminLoggedIn = true;
+          if (errEl) errEl.style.display = 'none';
+          showToast('Welcome, Admin!', 'success');
+          navigate('dashboard');
+        } else {
+          if (errEl) { errEl.textContent = 'Invalid credentials. Please try again.'; errEl.style.display = ''; }
+        }
+      });
+      // Enter key support
+      ['adminId', 'adminPassword'].forEach(function(id) {
+        var el = document.getElementById(id);
+        if (el) el.addEventListener('keydown', function(e) { if (e.key === 'Enter') loginBtn.click(); });
+      });
+    }
+    if (logoutBtn) {
+      logoutBtn.addEventListener('click', function() {
+        adminLoggedIn = false;
+        document.getElementById('adminId').value = '';
+        document.getElementById('adminPassword').value = '';
+        showToast('Logged out', 'success');
+        navigate('home');
+      });
+    }
+  })();
+
+  // --- Admin gallery rendering (for dashboard) ---
+  function renderAdminGalleries() {
+    ['mobile', 'desktop'].forEach(function(type) {
+      var container = document.getElementById('admin' + type.charAt(0).toUpperCase() + type.slice(1) + 'List');
+      var emptyEl = document.getElementById('admin' + type.charAt(0).toUpperCase() + type.slice(1) + 'Empty');
+      if (!container) return;
+      container.innerHTML = '';
+      var items = wallpapers[type] || [];
+      if (items.length === 0) { if (emptyEl) emptyEl.style.display = ''; return; }
+      if (emptyEl) emptyEl.style.display = 'none';
+      items.forEach(function(wp, i) {
+        var imgUrl = '/_blob/' + wp.assetId;
+        var card = document.createElement('div');
+        card.className = 'wallpaper-card ' + (type === 'mobile' ? 'mobile-card' : 'desktop-card');
+        card.innerHTML =
+          '<button class="delete-btn" data-wp-id="' + wp.id + '" data-asset-id="' + wp.assetId + '" title="Delete" style="display:flex">&times;</button>' +
+          '<div class="card-image"><img src="' + imgUrl + '" alt="' + (wp.name || 'Wallpaper') + '" loading="lazy"></div>' +
+          '<div class="card-overlay"><div class="card-title">' + (wp.name || (type === 'mobile' ? 'Mobile' : 'Desktop') + ' #' + (i+1)) + '</div></div>';
+        container.appendChild(card);
+      });
+    });
+  }
+
   window.adjustCount = async function(key, delta) {
-    if (!dbRef || !isOwner || saving) return;
+    if (!dbRef || !adminLoggedIn || saving) return;
     var newVal = Math.max(0, (liveCounts[key] || 0) + delta);
     liveCounts[key] = newVal;
     renderOwnerControls();
@@ -743,22 +920,26 @@ a { color: inherit; }
     var emptyEl = document.getElementById(type + 'Empty');
     if (!container) return;
     container.innerHTML = '';
-    var count = type === 'mobile' ? liveCounts.mobile : liveCounts.desktop;
-    if (count === 0) { if (emptyEl) emptyEl.style.display = ''; return; }
+    var items = wallpapers[type] || [];
+    if (items.length === 0) { if (emptyEl) emptyEl.style.display = ''; return; }
     if (emptyEl) emptyEl.style.display = 'none';
-    for (var i = 0; i < count; i++) {
-      var grad = sampleGradients[i % sampleGradients.length];
+    items.forEach(function(wp, i) {
+      var imgUrl = '/_blob/' + wp.assetId;
       var card = document.createElement('div');
       card.className = 'wallpaper-card ' + (type === 'mobile' ? 'mobile-card' : 'desktop-card') + ' reveal';
       card.setAttribute('data-type', type);
       card.setAttribute('data-idx', i);
+      card.setAttribute('data-wp-id', wp.id);
+      card.setAttribute('data-asset-id', wp.assetId);
+      var deleteBtn = adminLoggedIn ? '<button class="delete-btn" data-wp-id="' + wp.id + '" data-asset-id="' + wp.assetId + '" title="Delete">&times;</button>' : '';
       card.innerHTML =
-        '<div class="card-image"><div class="sample-gradient" style="background:' + grad + '"></div></div>' +
-        '<div class="card-overlay"><div class="card-title">' + (type === 'mobile' ? 'Mobile' : 'Desktop') + ' Wallpaper ' + (i+1) + '</div>' +
+        deleteBtn +
+        '<div class="card-image"><img src="' + imgUrl + '" alt="' + (wp.name || 'Wallpaper') + '" loading="lazy" onerror="this.style.display=\'none\';this.parentNode.innerHTML+=\'<div class=sample-gradient style=background:' + encodeURIComponent(sampleGradients[i % sampleGradients.length]) + '></div>\'"></div>' +
+        '<div class="card-overlay"><div class="card-title">' + (wp.name || (type === 'mobile' ? 'Mobile' : 'Desktop') + ' Wallpaper ' + (i+1)) + '</div>' +
         '<div class="card-meta">' + (type === 'mobile' ? '1080 × 1920' : '1920 × 1080') + '</div>' +
         '<div class="card-actions"><button class="btn btn-primary btn-small preview-btn" data-type="' + type + '" data-idx="' + i + '"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg> Preview</button></div></div>';
       container.appendChild(card);
-    }
+    });
     setTimeout(observeReveals, 100);
   }
 
@@ -779,11 +960,19 @@ a { color: inherit; }
     var preview = document.getElementById('lightboxPreview');
     var title = document.getElementById('lightboxTitle');
     var meta = document.getElementById('lightboxMeta');
-    var grad = sampleGradients[idx % sampleGradients.length];
     var isMobile = type === 'mobile';
-    var w = isMobile ? 270 : 480, h = isMobile ? 480 : 270;
-    preview.innerHTML = '<div class="lightbox-preview-gradient" style="width:' + w + 'px;height:' + h + 'px;border-radius:4px;background:' + grad + '"></div>';
-    title.textContent = (isMobile ? 'Mobile' : 'Desktop') + ' Wallpaper ' + (idx+1);
+    var items = wallpapers[type] || [];
+    var wp = items[idx];
+    if (wp && wp.assetId) {
+      var imgUrl = '/_blob/' + wp.assetId;
+      preview.innerHTML = '<img src="' + imgUrl + '" alt="' + (wp.name || 'Wallpaper') + '" style="max-width:90vw;max-height:80vh;object-fit:contain;border-radius:4px;box-shadow:0 20px 80px rgba(0,0,0,0.6)">';
+      title.textContent = wp.name || (isMobile ? 'Mobile' : 'Desktop') + ' Wallpaper ' + (idx+1);
+    } else {
+      var grad = sampleGradients[idx % sampleGradients.length];
+      var w = isMobile ? 270 : 480, h = isMobile ? 480 : 270;
+      preview.innerHTML = '<div class="lightbox-preview-gradient" style="width:' + w + 'px;height:' + h + 'px;border-radius:4px;background:' + grad + '"></div>';
+      title.textContent = (isMobile ? 'Mobile' : 'Desktop') + ' Wallpaper ' + (idx+1);
+    }
     meta.textContent = isMobile ? '1080 × 1920 px' : '1920 × 1080 px';
     lb.classList.add('active');
     document.body.style.overflow = 'hidden';
@@ -820,9 +1009,11 @@ a { color: inherit; }
     });
     document.getElementById('navLinks').classList.remove('open');
     var footer = document.getElementById('siteFooter');
-    if (footer) footer.style.display = (page === 'login') ? 'none' : '';
+    if (footer) footer.style.display = (page === 'login' || page === 'admin' || page === 'dashboard') ? 'none' : '';
     if (page === 'mobile') loadGallery('mobile');
     if (page === 'desktop') loadGallery('desktop');
+    if (page === 'dashboard') { renderOwnerControls(); renderAdminGalleries(); }
+    if (page === 'admin' && adminLoggedIn) { navigate('dashboard'); return; }
     window.scrollTo({ top: 0, behavior: 'smooth' });
     setTimeout(observeReveals, 100);
   };
@@ -897,6 +1088,100 @@ a { color: inherit; }
     t.textContent = msg; t.className = 'toast ' + (type||'') + ' show';
     setTimeout(function() { t.className = 'toast'; }, 3000);
   }
+
+  // --- Upload handler ---
+  function setupUpload(db, assets) {
+    var dropzone = document.getElementById('uploadDropzone');
+    var fileInput = document.getElementById('uploadFile');
+    var progressEl = document.getElementById('uploadProgress');
+    var progressFill = document.getElementById('progressFill');
+    var progressText = document.getElementById('progressText');
+    if (!dropzone || !fileInput) return;
+
+    dropzone.addEventListener('dragover', function(e) { e.preventDefault(); dropzone.classList.add('dragover'); });
+    dropzone.addEventListener('dragleave', function() { dropzone.classList.remove('dragover'); });
+    dropzone.addEventListener('drop', function(e) {
+      e.preventDefault(); dropzone.classList.remove('dragover');
+      if (e.dataTransfer.files.length > 0) handleUpload(e.dataTransfer.files[0]);
+    });
+    fileInput.addEventListener('change', function() {
+      if (fileInput.files.length > 0) handleUpload(fileInput.files[0]);
+    });
+
+    async function handleUpload(file) {
+      if (!file || !file.type.startsWith('image/')) {
+        showToast('Please select an image file (PNG, JPG, or WebP)', 'error');
+        return;
+      }
+      if (file.size > 20 * 1024 * 1024) {
+        showToast('File too large (max 20 MB)', 'error');
+        return;
+      }
+      var category = document.getElementById('uploadCategory').value;
+      progressEl.style.display = 'block';
+      progressFill.style.width = '30%';
+      progressText.textContent = 'Uploading image...';
+
+      try {
+        // Upload to assets
+        var result = await assets.upload(file);
+        progressFill.style.width = '70%';
+        progressText.textContent = 'Saving metadata...';
+
+        // Store metadata in DB
+        var name = file.name.replace(/\.[^.]+$/, '').replace(/[_-]/g, ' ');
+        name = name.charAt(0).toUpperCase() + name.slice(1);
+        await db.collection('wallpapers').add({
+          assetId: result.id,
+          type: category,
+          name: name,
+          contentType: result.contentType,
+          sizeBytes: result.sizeBytes,
+          createdAt: new Date().toISOString()
+        });
+
+        // Update stats counts
+        progressFill.style.width = '100%';
+        progressText.textContent = 'Done!';
+        showToast('Wallpaper uploaded successfully!', 'success');
+
+        // Auto-navigate to the gallery
+        setTimeout(function() { navigate(category); }, 800);
+      } catch(e) {
+        var msg = (e && e.message) || (e && e.code) || 'Upload failed';
+        showToast('Upload error: ' + msg, 'error');
+      }
+      setTimeout(function() {
+        progressEl.style.display = 'none';
+        progressFill.style.width = '0%';
+      }, 2000);
+      fileInput.value = '';
+    }
+  }
+
+  // --- Delete wallpaper handler ---
+  document.addEventListener('click', function(e) {
+    var delBtn = e.target.closest('.delete-btn');
+    if (!delBtn || !adminLoggedIn) return;
+    e.stopPropagation();
+    var wpId = delBtn.getAttribute('data-wp-id');
+    var assetId = delBtn.getAttribute('data-asset-id');
+    if (!wpId) return;
+    if (!confirm('Delete this wallpaper? This cannot be undone.')) return;
+    (async function() {
+      try {
+        // Delete DB record
+        await dbInstance.doc('wallpapers/' + wpId).delete();
+        // Delete asset
+        if (assetsInstance && assetId) {
+          try { await assetsInstance.delete(assetId); } catch(ae) { /* asset may already be gone */ }
+        }
+        showToast('Wallpaper deleted', 'success');
+      } catch(e) {
+        showToast('Delete failed: ' + ((e && e.message) || ''), 'error');
+      }
+    })();
+  });
 
   // --- Hash nav ---
   window.addEventListener('hashchange', function() {

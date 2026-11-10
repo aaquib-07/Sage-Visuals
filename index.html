@@ -1076,6 +1076,7 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
     <div class="owner-controls">
       <h3>Upload Wallpaper</h3>
       <p style="color:var(--fg-secondary);font-size:0.85rem;margin-bottom:1.5rem">Select category and upload your wallpaper image (PNG, JPG, or WebP &mdash; max 20 MB).</p>
+      <p id="localNotice" hidden style="margin-bottom:1.5rem;padding:0.9rem 1.1rem;border:1px solid var(--accent-glow);background:var(--accent-soft);border-radius:12px;color:var(--fg);font-size:0.85rem;line-height:1.6">This copy of the site is not connected to online storage. Wallpapers you add here are saved in this browser only. You can preview and download them here, but visitors on other devices will not see them.</p>
       <div class="upload-form">
         <div class="upload-field">
           <label>Category</label>
@@ -1087,7 +1088,7 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
         <div class="upload-dropzone" id="uploadDropzone">
           <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
           <p>Click or drop image here</p>
-          <input type="file" id="uploadFile" accept="image/png,image/jpeg,image/webp">
+          <input type="file" id="uploadFile" accept="image/png,image/jpeg,image/webp" multiple>
         </div>
       </div>
       <div class="upload-progress" id="uploadProgress">
@@ -1215,6 +1216,108 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
   var wallpapers = { mobile: [], desktop: [] };
   var adminLoggedIn = false;
 
+  // --- Where uploads go ---
+  // Live: the hosted page's shared storage. Local: this browser's own storage, used when the page
+  // runs without shared storage (opened as a file, or by a visitor who is not signed in).
+  var uploadStore = null, localMode = false, localStarted = false;
+  var localDb = null, localItems = [], localUrls = {};
+
+  function wpUrl(wp) { return wp ? (wp.url || (wp.assetId ? '/_blob/' + wp.assetId : '')) : ''; }
+
+  function liveStore(db, assets) {
+    return {
+      add: async function(file, category, name) {
+        var result = await assets.upload(file);
+        await db.collection('wallpapers').add({
+          assetId: result.id, type: category, name: name,
+          contentType: result.contentType, sizeBytes: result.sizeBytes,
+          createdAt: new Date().toISOString()
+        });
+      }
+    };
+  }
+
+  function openLocalDb() {
+    return new Promise(function(resolve) {
+      try {
+        var req = indexedDB.open('sage-visuals', 1);
+        req.onupgradeneeded = function() { req.result.createObjectStore('wallpapers', { keyPath: 'id' }); };
+        req.onsuccess = function() { resolve(req.result); };
+        req.onerror = req.onblocked = function() { resolve(null); };
+      } catch (e) { resolve(null); }
+    });
+  }
+  function idb(mode, fn) {
+    return new Promise(function(resolve, reject) {
+      if (!localDb) { reject(new Error('no local storage')); return; }
+      var tx, out;
+      try { tx = localDb.transaction('wallpapers', mode); out = fn(tx.objectStore('wallpapers')); }
+      catch (e) { reject(e); return; }
+      tx.oncomplete = function() { resolve(out && out.result); };
+      tx.onerror = tx.onabort = function() { reject(tx.error || new Error('local storage failed')); };
+    });
+  }
+  function localMeta(key, val) {
+    try {
+      if (val === undefined) return parseInt(localStorage.getItem('sv-' + key), 10) || 0;
+      localStorage.setItem('sv-' + key, String(val));
+    } catch (e) {}
+    return val || 0;
+  }
+  function refreshLocal() {
+    wallpapers = { mobile: [], desktop: [] };
+    localItems.sort(function(a, b) { return a.createdAt < b.createdAt ? 1 : -1; });
+    localItems.forEach(function(it) {
+      if (!wallpapers[it.type]) return;
+      if (!localUrls[it.id]) { try { localUrls[it.id] = URL.createObjectURL(it.blob); } catch (e) { return; } }
+      wallpapers[it.type].push({ id: it.id, url: localUrls[it.id], blob: it.blob, name: it.name, type: it.type, contentType: it.contentType, createdAt: it.createdAt });
+    });
+    liveCounts.mobile = wallpapers.mobile.length;
+    liveCounts.desktop = wallpapers.desktop.length;
+    renderStats();
+    if (adminLoggedIn) { renderOwnerControls(); renderAdminGalleries(); }
+    if (currentPage === 'mobile') loadGallery('mobile');
+    if (currentPage === 'desktop') loadGallery('desktop');
+  }
+  var localStore = {
+    add: async function(file, category, name) {
+      var rec = {
+        id: 'w' + Date.now().toString(36) + Math.random().toString(36).slice(2, 8),
+        type: category, name: name, contentType: file.type, sizeBytes: file.size,
+        createdAt: new Date().toISOString(), blob: file
+      };
+      var kept = false;
+      if (localDb) { try { await idb('readwrite', function(st) { st.put(rec); }); kept = true; } catch (e) { kept = false; } }
+      localItems.push(rec);
+      refreshLocal();
+      return { unsaved: !kept };
+    },
+    remove: async function(id) {
+      if (localDb) { try { await idb('readwrite', function(st) { st.delete(id); }); } catch (e) {} }
+      localItems = localItems.filter(function(it) { return it.id !== id; });
+      if (localUrls[id]) { try { URL.revokeObjectURL(localUrls[id]); } catch (e) {} delete localUrls[id]; }
+      refreshLocal();
+    }
+  };
+
+  function useFallbackCounts() {
+    if (dbInstance) { renderStats(); return; }      // shared storage is there, only slow or empty
+    if (localStarted) return;
+    localStarted = true; localMode = true; uploadStore = localStore;
+    liveCounts = { mobile: 0, desktop: 0, collections: localMeta('collections'), downloads: localMeta('downloads') };
+    renderStats();
+    var note = document.getElementById('localNotice');
+    if (note) note.hidden = false;
+    openLocalDb().then(function(handle) {
+      localDb = handle;
+      if (!handle) return;
+      return idb('readonly', function(st) { return st.getAll(); }).then(function(rows) {
+        localItems = (rows || []).concat(localItems);
+        refreshLocal();
+      });
+    }).catch(function() {});
+  }
+
   // --- DB + Assets init ---
   (async function initLive() {
     if (typeof claude === 'undefined') { useFallbackCounts(); return; }
@@ -1269,27 +1372,12 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
         if (currentPage === 'desktop') loadGallery('desktop');
       }, function(err) { /* silent */ });
 
-      // Setup upload handlers (always init, gated by adminLoggedIn in the handler)
-      if (assets) setupUpload(db, assets);
+      // Uploads go to the shared storage when this viewer may write to it
+      if (assets) uploadStore = liveStore(db, assets);
     } catch(e) {
       useFallbackCounts();
     }
   })();
-
-  var offlineUploadWired = false;
-  function useFallbackCounts() {
-    liveCounts = { mobile: 0, desktop: 0, collections: 0, downloads: 0 };
-    renderStats();
-    if (!offlineUploadWired) {
-      offlineUploadWired = true;
-      var fi = document.getElementById('uploadFile');
-      if (fi) fi.addEventListener('change', function() {
-        if (assetsInstance) return;
-        fi.value = '';
-        showToast('Uploads work on the hosted Sage Visuals page.', 'error');
-      });
-    }
-  }
 
   function renderStats() {
     var total = liveCounts.mobile + liveCounts.desktop;
@@ -1380,11 +1468,11 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
       if (items.length === 0) { if (emptyEl) emptyEl.style.display = ''; return; }
       if (emptyEl) emptyEl.style.display = 'none';
       items.forEach(function(wp, i) {
-        var imgUrl = '/_blob/' + wp.assetId;
+        var imgUrl = wpUrl(wp);
         var card = document.createElement('div');
         card.className = 'wallpaper-card ' + (type === 'mobile' ? 'mobile-card' : 'desktop-card');
         card.innerHTML =
-          '<button class="delete-btn" data-wp-id="' + wp.id + '" data-asset-id="' + wp.assetId + '" title="Delete" style="display:flex">&times;</button>' +
+          '<button class="delete-btn" data-wp-id="' + wp.id + '" data-asset-id="' + (wp.assetId || '') + '" title="Delete" style="display:flex">&times;</button>' +
           '<div class="card-image"><img src="' + imgUrl + '" alt="' + (wp.name || 'Wallpaper') + '" loading="lazy"></div>' +
           '<div class="card-overlay"><div class="card-title">' + (wp.name || (type === 'mobile' ? 'Mobile' : 'Desktop') + ' #' + (i+1)) + '</div></div>';
         container.appendChild(card);
@@ -1393,7 +1481,15 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
   }
 
   window.adjustCount = async function(key, delta) {
-    if (!dbRef || !adminLoggedIn || saving) return;
+    if (!adminLoggedIn || saving) return;
+    if (localMode) {
+      liveCounts[key] = Math.max(0, (liveCounts[key] || 0) + delta);
+      localMeta(key, liveCounts[key]);
+      renderOwnerControls(); renderStats();
+      showToast('Count updated!', 'success');
+      return;
+    }
+    if (!dbRef) return;
     var newVal = Math.max(0, (liveCounts[key] || 0) + delta);
     liveCounts[key] = newVal;
     renderOwnerControls();
@@ -1431,14 +1527,14 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
     if (items.length === 0) { if (emptyEl) emptyEl.style.display = ''; return; }
     if (emptyEl) emptyEl.style.display = 'none';
     items.forEach(function(wp, i) {
-      var imgUrl = '/_blob/' + wp.assetId;
+      var imgUrl = wpUrl(wp);
       var card = document.createElement('div');
       card.className = 'wallpaper-card ' + (type === 'mobile' ? 'mobile-card' : 'desktop-card') + ' reveal';
       card.setAttribute('data-type', type);
       card.setAttribute('data-idx', i);
       card.setAttribute('data-wp-id', wp.id);
-      card.setAttribute('data-asset-id', wp.assetId);
-      var deleteBtn = adminLoggedIn ? '<button class="delete-btn" data-wp-id="' + wp.id + '" data-asset-id="' + wp.assetId + '" title="Delete">&times;</button>' : '';
+      card.setAttribute('data-asset-id', wp.assetId || '');
+      var deleteBtn = adminLoggedIn ? '<button class="delete-btn" data-wp-id="' + wp.id + '" data-asset-id="' + (wp.assetId || '') + '" title="Delete">&times;</button>' : '';
       card.innerHTML =
         deleteBtn +
         '<div class="card-image"><img src="' + imgUrl + '" alt="' + (wp.name || 'Wallpaper') + '" loading="lazy" onerror="this.style.display=\'none\';this.parentNode.innerHTML+=\'<div class=sample-gradient style=background:' + encodeURIComponent(sampleGradients[i % sampleGradients.length]) + '></div>\'"></div>' +
@@ -1470,8 +1566,8 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
     var isMobile = type === 'mobile';
     var items = wallpapers[type] || [];
     var wp = items[idx];
-    if (wp && wp.assetId) {
-      var imgUrl = '/_blob/' + wp.assetId;
+    if (wp && wpUrl(wp)) {
+      var imgUrl = wpUrl(wp);
       preview.innerHTML = '<img src="' + imgUrl + '" alt="' + (wp.name || 'Wallpaper') + '" style="max-width:90vw;max-height:80vh;object-fit:contain;border-radius:4px;box-shadow:0 20px 80px rgba(0,0,0,0.6)">';
       title.textContent = wp.name || (isMobile ? 'Mobile' : 'Desktop') + ' Wallpaper ' + (idx+1);
     } else {
@@ -1493,9 +1589,9 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
   async function downloadCurrent() {
     var items = wallpapers[currentLightboxType] || [];
     var wp = items[currentLightboxIdx];
-    if (!wp || !wp.assetId) { showToast('This wallpaper is not available yet', 'error'); return; }
-    var url = '/_blob/' + wp.assetId, blob = null;
-    try { var res = await fetch(url); if (res.ok) blob = await res.blob(); } catch (e) { blob = null; }
+    if (!wp || !wpUrl(wp)) { showToast('This wallpaper is not available yet', 'error'); return; }
+    var url = wpUrl(wp), blob = wp.blob || null;
+    if (!blob) { try { var res = await fetch(url); if (res.ok) blob = await res.blob(); } catch (e) { blob = null; } }
     if (!blob) {
       try {
         blob = await new Promise(function(resolve, reject) {
@@ -1537,6 +1633,13 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
   }
 
   async function trackDownload() {
+    if (localMode) {
+      liveCounts.downloads = (liveCounts.downloads || 0) + 1;
+      localMeta('downloads', liveCounts.downloads);
+      var localEl = document.getElementById('stat-downloads');
+      if (localEl) localEl.textContent = liveCounts.downloads;
+      return;
+    }
     if (!dbRef) return;
     liveCounts.downloads = (liveCounts.downloads || 0) + 1;
     var dlEl = document.getElementById('stat-downloads');
@@ -1553,6 +1656,7 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
 
   // --- Navigation ---
   window.navigate = function(page) {
+    if (page === 'dashboard' && !adminLoggedIn) page = 'admin';
     currentPage = page;
     document.querySelectorAll('.page').forEach(function(p) { p.classList.remove('active'); });
     var target = document.getElementById('page-' + page);
@@ -1643,74 +1747,74 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
   }
 
   // --- Upload handler ---
-  function setupUpload(db, assets) {
+  (function wireUpload() {
     var dropzone = document.getElementById('uploadDropzone');
     var fileInput = document.getElementById('uploadFile');
     var progressEl = document.getElementById('uploadProgress');
     var progressFill = document.getElementById('progressFill');
     var progressText = document.getElementById('progressText');
-    if (!dropzone || !fileInput) return;
+    var categoryEl = document.getElementById('uploadCategory');
+    if (!dropzone || !fileInput || !categoryEl) return;
+    var busy = false;
 
     dropzone.addEventListener('dragover', function(e) { e.preventDefault(); dropzone.classList.add('dragover'); });
     dropzone.addEventListener('dragleave', function() { dropzone.classList.remove('dragover'); });
     dropzone.addEventListener('drop', function(e) {
       e.preventDefault(); dropzone.classList.remove('dragover');
-      if (e.dataTransfer.files.length > 0) handleUpload(e.dataTransfer.files[0]);
+      handleFiles(e.dataTransfer && e.dataTransfer.files);
     });
-    fileInput.addEventListener('change', function() {
-      if (fileInput.files.length > 0) handleUpload(fileInput.files[0]);
-    });
+    fileInput.addEventListener('change', function() { handleFiles(fileInput.files); });
 
-    async function handleUpload(file) {
-      if (!file || !file.type.startsWith('image/')) {
-        showToast('Please select an image file (PNG, JPG, or WebP)', 'error');
+    async function handleFiles(list) {
+      var files = Array.prototype.slice.call(list || []);
+      fileInput.value = '';
+      if (!files.length || busy) return;
+      if (!adminLoggedIn) { showToast('Log in as admin to upload.', 'error'); return; }
+      if (!uploadStore) {
+        showToast(dbInstance ? 'Uploading needs edit access to this page.' : 'Storage is still starting. Try again in a moment.', 'error');
         return;
       }
-      if (file.size > 20 * 1024 * 1024) {
-        showToast('File too large (max 20 MB)', 'error');
-        return;
-      }
-      var category = document.getElementById('uploadCategory').value;
-      progressEl.style.display = 'block';
-      progressFill.style.width = '30%';
-      progressText.textContent = 'Uploading image...';
-
-      try {
-        // Upload to assets
-        var result = await assets.upload(file);
-        progressFill.style.width = '70%';
-        progressText.textContent = 'Saving metadata...';
-
-        // Store metadata in DB
-        var name = file.name.replace(/\.[^.]+$/, '').replace(/[_-]/g, ' ');
+      var category = categoryEl.value;
+      var label = categoryEl.options[categoryEl.selectedIndex].text;
+      var ok = 0, skipped = 0, unsaved = false, lastErr = '';
+      busy = true;
+      if (progressEl) progressEl.style.display = 'block';
+      for (var i = 0; i < files.length; i++) {
+        var file = files[i];
+        if (!file.type || file.type.indexOf('image/') !== 0 || file.size > 20 * 1024 * 1024) { skipped++; continue; }
+        if (progressFill) progressFill.style.width = Math.round((i + 0.5) / files.length * 100) + '%';
+        if (progressText) progressText.textContent = files.length > 1 ? 'Uploading ' + (i + 1) + ' of ' + files.length + '...' : 'Uploading image...';
+        var name = file.name.replace(/\.[^.]+$/, '').replace(/[_-]+/g, ' ').trim() || 'Wallpaper';
         name = name.charAt(0).toUpperCase() + name.slice(1);
-        await db.collection('wallpapers').add({
-          assetId: result.id,
-          type: category,
-          name: name,
-          contentType: result.contentType,
-          sizeBytes: result.sizeBytes,
-          createdAt: new Date().toISOString()
-        });
-
-        // Update stats counts
-        progressFill.style.width = '100%';
-        progressText.textContent = 'Done!';
-        showToast('Wallpaper uploaded successfully!', 'success');
-
-        // Auto-navigate to the gallery
-        setTimeout(function() { navigate(category); }, 800);
-      } catch(e) {
-        var msg = (e && e.message) || (e && e.code) || 'Upload failed';
-        showToast('Upload error: ' + msg, 'error');
+        try {
+          var res = await uploadStore.add(file, category, name);
+          ok++;
+          if (res && res.unsaved) unsaved = true;
+        } catch (e) {
+          skipped++;
+          lastErr = (e && e.message) || (e && e.code) || '';
+        }
+      }
+      busy = false;
+      if (progressFill) progressFill.style.width = '100%';
+      if (ok) {
+        if (progressText) progressText.textContent = 'Done!';
+        var msg = (ok === 1 ? 'Wallpaper added to ' : ok + ' wallpapers added to ') + label + '.';
+        if (skipped) msg += ' ' + skipped + ' skipped.';
+        if (unsaved) msg += ' This browser could not keep it after the tab closes.';
+        else if (localMode) msg += ' Saved in this browser.';
+        showToast(msg, 'success');
+        setTimeout(function() { navigate(category); }, 900);
+      } else {
+        if (progressText) progressText.textContent = 'Nothing uploaded';
+        showToast(lastErr ? 'Upload error: ' + lastErr : 'Choose PNG, JPG or WebP images up to 20 MB.', 'error');
       }
       setTimeout(function() {
-        progressEl.style.display = 'none';
-        progressFill.style.width = '0%';
+        if (progressEl) progressEl.style.display = 'none';
+        if (progressFill) progressFill.style.width = '0%';
       }, 2000);
-      fileInput.value = '';
     }
-  }
+  })();
 
   // --- Delete wallpaper handler ---
   document.addEventListener('click', function(e) {
@@ -1734,6 +1838,7 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
     }
     (async function() {
       try {
+        if (localMode) { await localStore.remove(wpId); showToast('Wallpaper deleted', 'success'); return; }
         // Delete DB record
         await dbInstance.doc('wallpapers/' + wpId).delete();
         // Delete asset
